@@ -32,7 +32,11 @@ Install CMake, CUDA.
 > mkdir build && cd build
 > cmake ..
 > make -j4
-> cd .. && ./run_me.py
+> sudo make install
+> cd ../example/RSVD_C && mkdir build
+> cd build && cmake .. && make -j4
+> cd ..&&./run_me.py
+
 ```
 
 # Performance Comparsion
