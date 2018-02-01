@@ -13,16 +13,15 @@ FILE(GLOB SOURCES "src/*.cu" "src/*.cpp" "src/rpca/*.cu" "src/rpca/*.cpp")
 
 CUDA_ADD_LIBRARY(RLAgpu ${SOURCES})
 
-LIST(APPEND CMAKE_CXX_FLAGS "-std=c++11 -O3 -msse2 -msse3 -Wall -Wno-unused-local-typedefs")
+LIST(APPEND CMAKE_CXX_FLAGS "-O3 -msse2 -msse3 -Wall -Wno-unused-local-typedefs")
 
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}  "-Xcompiler;-fPIC;-std=c++11")
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "--ftz=true;--prec-div=false;--prec-sqrt=false")
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}  "-Xcompiler;-fPIC;-ftz=true;--prec-div=false;--prec-sqrt=false")
 LIST(APPEND CUDA_NVCC_FLAGS --compiler-options -fno-strict-aliasing -lineinfo -gencode arch=compute_52,code=sm_52 -Xptxas -dlcm=cg)
 
 target_link_libraries(RLAgpu ${CUDA_LIBRARIES} 
                              ${CUDA_cublas_LIBRARY} 
                              ${CUDA_cusolver_LIBRARY}
-			      ${CUDA_curand_LIBRARY}
+			     ${CUDA_curand_LIBRARY}
                       )
 
 install (TARGETS RLAgpu DESTINATION bin)

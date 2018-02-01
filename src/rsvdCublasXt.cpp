@@ -14,13 +14,22 @@ void cublasXtRsvdColSampling(double *U, double *S, double *VT, double *A,
     const double double_one = 1.0, double_zero = 0.0;
     
     /*********** Step 1: Y = A * Omega, ************/
-    double *Omega = (double*)malloc(n * l * sizeof(double));
+    double *Omega;
+    CHECK_CUDA( cudaMallocHost((void**)&Omega, n * l * sizeof(double)) );
     genNormalRand(Omega, n, l);
     
     const uint64_t ldY = roundup_to_32X( m );
     
+    
+    int QR_workSpace = orth_CAQR_size(m, l);
+    
     double *d_Y;
-    CHECK_CUDA(cudaMalloc((void**)&d_Y, ldY * l * sizeof(double)));
+    
+    //CHECK_CUDA(cudaMalloc((void**)&d_Y, ldY * l * sizeof(double)));
+    CHECK_CUDA( cudaMalloc((void**)&d_Y, QR_workSpace * sizeof(double)) );
+    CHECK_CUDA( cudaMemsetAsync(d_Y,  0, QR_workSpace * sizeof(double)) );
+    
+    
     
     // Y = A * Omega, Y[mxl] = A[mxn] * Omega[nxl] memory usage:  m(l+n) + nl
     CHECK_CUBLAS( cublasXtDgemm( cublasXtH,  CUBLAS_OP_N, CUBLAS_OP_N,
@@ -31,7 +40,7 @@ void cublasXtRsvdColSampling(double *U, double *S, double *VT, double *A,
                                 &double_zero,
                                 d_Y, ldY) );
     
-    free(Omega);
+    CHECK_CUDA( cudaFreeHost(Omega) );
     
     /********** Step 2: power iteration *********/
     const uint64_t ldP = roundup_to_32X( n );
@@ -63,9 +72,11 @@ void cublasXtRsvdColSampling(double *U, double *S, double *VT, double *A,
     }
     
     CHECK_CUDA( cudaFree(d_P) );
-    orthogonalization(cusolverH, d_Y, m, l);
+    orth_CAQR(d_Y, m, l);
+    //orthogonalization(cusolverH, d_Y, m, l); orth by cusolver
     
-    double *Q = (double*)malloc(m * l * sizeof(double));
+    double *Q;
+    CHECK_CUDA( cudaMallocHost((void**)&Q, m * l * sizeof(double)) );
     CHECK_CUBLAS( cublasGetMatrix(m, l, sizeof(d_Y), d_Y, ldY, Q, m) );
     
     /************ Step 3: B' = A' * Q, B'[nxl] = A'[nxm] * Q[mxl] **********/
@@ -116,7 +127,7 @@ void cublasXtRsvdColSampling(double *U, double *S, double *VT, double *A,
                                 &double_zero,
                                 U, m) );
     
-    free(Q);
+    CHECK_CUDA( cudaFreeHost(Q) );
     CHECK_CUDA( cudaFree(d_UhatT) );
     
     /**********Step 7: transpose V ****/
@@ -145,12 +156,20 @@ void cublasXtRsvdRowSampling(double *U, double *S, double *VT, double *A,
 
     
     /*********** Step 1: Y =  A' * Omega, ************/
-    double *Omega = (double*)malloc(m * l * sizeof(double));
+    double *Omega;
+    CHECK_CUDA( cudaMallocHost((void**)&Omega, m * l * sizeof(double)) );
     genNormalRand(Omega, m, l);
     
     const uint64_t ldY = roundup_to_32X( n );
+    
     double *d_Y;
-    CHECK_CUDA(cudaMalloc((void**)&d_Y, ldY * l * sizeof(double)) );
+    
+    //CHECK_CUDA(cudaMalloc((void**)&d_Y, ldY * l * sizeof(double)) );
+    // set Y to zero, very important
+    int QR_workSpace = orth_CAQR_size(n, l);
+    CHECK_CUDA( cudaMalloc((void**)&d_Y,    QR_workSpace * sizeof(double)) );
+    CHECK_CUDA( cudaMemsetAsync(d_Y, 0,     QR_workSpace * sizeof(double)) );
+    
     // Y = A' * Omega, Y[nxl] = A'[nxm] * Omega[mxl]
     CHECK_CUBLAS( cublasXtDgemm( cublasXtH,  CUBLAS_OP_T, CUBLAS_OP_N,
                                 n, l, m,
@@ -160,7 +179,7 @@ void cublasXtRsvdRowSampling(double *U, double *S, double *VT, double *A,
                                 &double_zero,
                                 d_Y, ldY) );
     
-    free(Omega);
+    CHECK_CUDA( cudaFreeHost(Omega) );
     
     /********** Step 2: power iteration *********/
     const uint64_t ldP = roundup_to_32X( m );
@@ -188,9 +207,12 @@ void cublasXtRsvdRowSampling(double *U, double *S, double *VT, double *A,
     }
     
     CHECK_CUDA( cudaFree(d_P) );
-    orthogonalization(cusolverH, d_Y, n, l);
     
-    double *Q = (double*)malloc(n * l * sizeof(double));
+    orth_CAQR(d_Y, n, l);
+    //orthogonalization(cusolverH, d_Y, n, l); orth by cusolver
+    
+    double *Q;
+    CHECK_CUDA( cudaMallocHost((void**)&Q, n * l * sizeof(double)) );
     CHECK_CUBLAS( cublasGetMatrix(n, l, sizeof(double), d_Y, ldY, Q, n) );
     
     /************ Step 3: B = A * Q **********/
@@ -238,7 +260,7 @@ void cublasXtRsvdRowSampling(double *U, double *S, double *VT, double *A,
                                 &double_zero,
                                 VT, l) );
     
-    free(Q);
+    CHECK_CUDA( cudaFreeHost(Q) );
     CHECK_CUDA( cudaFree(d_S) );
     CHECK_CUDA( cudaFree(d_VThat) );
     
@@ -256,7 +278,7 @@ void cublasXtRsvd(double *U, double *S, double *VT, double *A,
     int devices[1] = { 0 };
     CHECK_CUBLAS( cublasXtDeviceSelect(cublasXtH, 1, devices) );
     
-    if(m > n){
+    if(m >= n){
         cublasXtRsvdColSampling(U, S, VT, A, m, n, l, q, cusolverH, cublasH, cublasXtH);
     }else{
         cublasXtRsvdRowSampling(U, S, VT, A, m, n, l, q, cusolverH, cublasH, cublasXtH);

@@ -10,7 +10,6 @@
 #include <cusolverDn.h>
 #include <curand_kernel.h> // for random number generator
 #include <iomanip>
-#include <chrono> // for timer
 
 #define TimerON true
 #define testError true

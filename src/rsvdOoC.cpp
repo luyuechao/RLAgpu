@@ -1,4 +1,4 @@
-/*This file implements the out of core */
+ /*This file implements the out of core */
 #include "gpuErrorCheck.h"
 #include "rsvd.h"
 #include <fstream>
@@ -42,7 +42,7 @@ void powerIterationOoC_colSampling( double *Y, double *Yb, const double *Ac,
     
     
     for(uint64_t i = 0; i < q - 1; i++){
-        // P = As' * TEMP, P[nsxl] = As'[nsxm] * TEMP[mxl]
+        // TEMP = As' * Yb, P[nsxl] = Ac'[nsxm] * Yb[mxl]
         CHECK_CUBLAS( cublasDgemm( cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
                                   ns, l, m,
                                   &double_one,
@@ -135,7 +135,7 @@ void rsvdOoC_colSampling(double *host_U, double *host_S, double *host_VT, const 
 
     CHECK_CUDA( cudaMalloc((void**)&Yb, ldYb * l  * sizeof(double)) );
     
-    // set Y to 0, VERY IMPORTANT.
+
     int QR_workSpace = orth_CAQR_size(m, l);
     
     //cout << "m * l        = " << ldAc * l << endl;
@@ -147,6 +147,7 @@ void rsvdOoC_colSampling(double *host_U, double *host_S, double *host_VT, const 
     //cout << "allocated = " << ( allocated * sizeof(double) ) / (1024.0 * 1024.0 * 1024.0);
     
     CHECK_CUDA( cudaMalloc((void**)&Y, QR_workSpace * sizeof(double)) );
+    // set Y to 0, VERY IMPORTANT.
     CHECK_CUDA( cudaMemsetAsync(Y,  0, QR_workSpace * sizeof(double)) );
     
     curandGenerator_t randGen;
@@ -165,6 +166,8 @@ void rsvdOoC_colSampling(double *host_U, double *host_S, double *host_VT, const 
         CHECK_CUDA( cudaMalloc((void**)&Omega, ldOmega * l * sizeof(double)) );
         // generate double normal distribution with mean = 0.0, stddev = 1.0
         CHECK_CURAND( curandGenerateNormalDouble(randGen, Omega, ldOmega * l, 0.0, 1.0) );
+        
+        CHECK_CUDA( cudaThreadSynchronize() );
         
         CHECK_CUBLAS( cublasDgemm( cublasH,  CUBLAS_OP_N, CUBLAS_OP_N,
                                   m, l, nb,
@@ -186,9 +189,11 @@ void rsvdOoC_colSampling(double *host_U, double *host_S, double *host_VT, const 
         
         CHECK_CUBLAS( cublasSetMatrixAsync(m, lastbatch, sizeof(host_A),
                                            host_A + m * nb * batch, m, Ac, ldAc, cudaStream1) );
-        /*********** TEMP[mxl] = As[mxlastbatch] * Omega[lastbatchxl] ************/
+        /*********** Yb[mxl] = Ac[mxlastbatch] * Omega[lastbatchxl] ************/
         CHECK_CUDA( cudaMalloc((void**)&Omega, lastbatch * l * sizeof(double)) );
         CHECK_CURAND(curandGenerateNormalDouble(randGen, Omega, lastbatch * l, 0.0, 1.0));
+        
+        CHECK_CUDA( cudaThreadSynchronize() );
         CHECK_CUBLAS( cublasDgemm( cublasH,  CUBLAS_OP_N, CUBLAS_OP_N,
                                   m, l, lastbatch,
                                   &double_one,
@@ -231,7 +236,7 @@ void rsvdOoC_colSampling(double *host_U, double *host_S, double *host_VT, const 
         CHECK_CUBLAS( cublasDgemm( cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
                                   nb, l, m,
                                   &double_one,
-                                  Ac, ldAc,
+                                  Ac, ldAc, 
                                   Y,  ldY,
                                   &double_zero,
                                   BT + nb * i , ldBT) );
@@ -590,6 +595,7 @@ void rsvdOoC_rowSampling(double *host_U, double *host_S, double *host_VT, const 
 
     // copy Sv to host
     CHECK_CUDA( cudaMemcpyAsync(host_S, Sv, l * sizeof(double), cudaMemcpyDeviceToHost) );
+    
     // copy U to host
     CHECK_CUBLAS( cublasGetMatrixAsync(m, l, sizeof(double), U, ldU, host_U, m, cudaStream1) );
     
@@ -647,7 +653,7 @@ void rsvdOoC(double *host_U, double *host_S, double *host_VT, const double *host
              const uint64_t q, const uint64_t s,
              cusolverDnHandle_t &cusolverH, cublasHandle_t &cublasH){
     
-    if(m > n){
+    if(m >= n){
         rsvdOoC_colSampling(host_U, host_S, host_VT, host_A, m, n, l, q, s, cusolverH, cublasH);
     }else{
         rsvdOoC_rowSampling(host_U, host_S, host_VT, host_A, m, n, l, q, s, cusolverH, cublasH);

@@ -55,7 +55,7 @@ void genUniformRand(double *h_rand, const uint64_t m, uint64_t n){
     
     const uint64_t batchSize = pow(2, 30) / sizeof(double);// fixed 1GB data
     const uint64_t lda = roundup_to_32X( m );
-    double *d_rand  = nullptr;
+    double *d_rand;
     if( m * n < batchSize){
         
         // allocate device
@@ -103,8 +103,8 @@ void genLowRankMatrix(double *h_A,
     double *h_rand1, *h_rand2;
 //    CHECK_CUDA( cudaHostAlloc( (void**)&h_rand1, m * k * sizeof(double), cudaHostAllocPortable ) );
 //    CHECK_CUDA( cudaHostAlloc( (void**)&h_rand2, k * n * sizeof(double), cudaHostAllocPortable ) );
-    h_rand1 = (double*)malloc(m * k * sizeof(double));
-    h_rand2 = (double*)malloc(k * n * sizeof(double));
+    CHECK_CUDA( cudaMallocHost((void**)&h_rand1, m * k * sizeof(double)) );
+    CHECK_CUDA( cudaMallocHost((void**)&h_rand2, k * n * sizeof(double)) );
     
     // allocate device
     genNormalRand(h_rand1, m, k);
@@ -127,10 +127,8 @@ void genLowRankMatrix(double *h_A,
     
     CHECK_CUBLAS( cublasXtDestroy(cublasXtH) );
     
-    //    CHECK_CUDA( cudaFreeHost(h_rand1) );
-    //    CHECK_CUDA( cudaFreeHost(h_rand2) );
-    free(h_rand1);
-    free(h_rand2);
+    CHECK_CUDA( cudaFreeHost(h_rand1) );
+    CHECK_CUDA( cudaFreeHost(h_rand2) );
     
 }
 
@@ -196,11 +194,13 @@ double svdFrobeniusDiff(const double *A,
     int devices[1] = { 0 };
     CHECK_CUBLAS( cublasXtDeviceSelect(cublasXtH, 1, devices) );
     
-    double *h_Sv   = (double*)malloc(l * l * sizeof(double));
-    double *h_TEMP = (double*)malloc(l * n * sizeof(double));
+    double *h_Sv, *h_TEMP;
+    
+    CHECK_CUDA( cudaMallocHost((void**)&h_Sv, l * l * sizeof(double)) );
+    CHECK_CUDA( cudaMallocHost((void**)&h_TEMP,l * n * sizeof(double)) );
+    
     memset(h_Sv,   0, l * l * sizeof(double));
     memset(h_TEMP, 0, l * n * sizeof(double));
-    
     
     // TODO: change to matrix-vector multiplcation
     for(uint64_t i = 0; i < l; i++){
@@ -220,10 +220,10 @@ double svdFrobeniusDiff(const double *A,
     //cout << "S = " << frobeniusNorm(S, l, 1) << endl;
     //cout << "h_TEMP = " << frobeniusNorm(h_TEMP, l, n) << endl;
     
-    free(h_Sv);
+    CHECK_CUDA( cudaFreeHost(h_Sv) );
     
     double *h_DIFF;
-    h_DIFF = (double*)malloc(m * n * sizeof(double));
+    CHECK_CUDA( cudaMallocHost((void**)&h_DIFF, m * n * sizeof(double)) );
     //memset(h_DIFF, 0, m * n * sizeof(double));
     memcpy(h_DIFF, A, m * n * sizeof(double));
     // DIFF := -U * h_TEMP + A, DIFF[m, n] = -1 * U[m, l] * h_TEMP[l, n] + A[m, n]
@@ -235,80 +235,15 @@ double svdFrobeniusDiff(const double *A,
                                 &double_one,
                                 h_DIFF, m) );
     
-    free(h_TEMP);
+    CHECK_CUDA( cudaFreeHost(h_TEMP) );
     CHECK_CUBLAS( cublasXtDestroy(cublasXtH) );
     //cout << "Diff = " << frobeniusNorm(h_DIFF, m, n) << endl;
     //cout << "A = " << frobeniusNorm(A, m, n) << endl;
     
     double temp = frobeniusNorm(h_DIFF, m, n) / frobeniusNorm(A, m, n);
     
-    free(h_DIFF);
+    CHECK_CUDA( cudaFreeHost(h_DIFF) );
 
     return temp;
     
 }
-
-
-//void transpose(double *AT, const double *A,
-//               const uint64_t m, const uint64_t n){
-//    
-//    const double double_one = 1.0f, double_zero = 0.0f;
-//    
-//    size_t freeMem, totalMem;
-//    CHECK_CUDA(cudaMemGetInfo(&freeMem, &totalMem));
-//    
-//    double dataSize = m * n * sizeof(double);
-//    
-//    uint64_t batchNum = 0, ms = 0, batchSize = 0, lastbach = 0;
-//    
-//    batchNum = dataSize / (freeMem / 4);
-//    if(batchNum == 0){
-//        ms = m;
-//        lastbach = m;
-//    }else{
-//        ms = m / s;
-//        lastbach = m - ms * s;
-//    }
-//    
-//    
-//    double *d_As, *d_ATs;
-//    CHECK_CUDA( cudaMalloc((void**)&d_As,  ms * n * sizeof(double)) );
-//    CHECK_CUDA( cudaMalloc((void**)&d_ATs, n * ms * sizeof(double)) );
-//    
-//    for(uint64_t i = 0; i < batchNum - 1; i++){
-//        CHECK_CUBLAS( cublasSetMatrix(ms, n, sizeof(double), A + ms * i, m, d_As, ms) );
-//        
-//        CHECK_CUBLAS( cublasXtDgeam(cublasXtH, CUBLAS_OP_T, CUBLAS_OP_T,
-//                                    n, ms, // output dimension
-//                                    &double_one,  d_As, ms,
-//                                    &double_zero, NULL, ms,
-//                                    d_ATs, n ) );
-//        
-//        CHECK_CUBLAS( cublasGetMatrix(n, ms, sizeof(double), d_ATs, n, AT + ms * n * i, n) );
-//    }
-//    
-//    if(lastbach != 0){
-//        CHECK_CUBLAS( cublasSetMatrix(lastbach, n, sizeof(double), A + ms * batchNum, m,)) );
-//    
-//    }
-//}
-//
-//void tranposeInPlace(double *A, const uint64_t m, const uint64_t n){
-//    
-//    cublasXtHandle_t cublasXtH = NULL;
-//    cublasXtCreate(&cublasXtH);
-//    // setup device
-//    int devices[1] = { 0 };
-//    CHECK_CUBLAS( cublasXtDeviceSelect(cublasXtH, 1, devices) );
-//    
-//    double *AT = (double *)malloc(m * n * sizeof(double));
-//    
-//    transpose(cublasXtH, AT, A, m, n);
-//    free(A);
-//    
-//    // change pointer
-//    A = AT;
-//    CHECK_CUBLAS( cublasXtDestroy(cublasXtH) );
-//
-//
-//}

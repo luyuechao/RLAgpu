@@ -5,7 +5,6 @@
 #include <iostream>
 #include <cuda.h>
 
-using namespace std;
 /* Tuned settings for float and double */
 /*
 #define FLOAT
@@ -44,6 +43,7 @@ public:
     level_t(int nb, int ab, int bo, int l);
 };
 
+using namespace std;
 
 /* This defines the main matrix data structure and functions to
  access and modify it */

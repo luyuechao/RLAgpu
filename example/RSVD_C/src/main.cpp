@@ -3,8 +3,7 @@
 #include <fstream>
 #include <chrono> // for timer
 
-#define testError false 
-#define TimerON false
+#define testError true
 
 using namespace std;
 
@@ -36,13 +35,14 @@ void rsvd_test(const uint64_t m, const uint64_t n, const uint64_t k, const doubl
     
     // allocate host memory as pinned memory
     double *host_S1;
-    //CHECK_CUDA( cudaHostAlloc( (void**)&host_A,  m * n * sizeof(double), cudaHostAllocPortable ) );
+
     CHECK_CUDA( cudaHostAlloc( (void**)&host_S1,     l * sizeof(double), cudaHostAllocPortable ) );
-    //CHECK_CUDA( cudaHostAlloc( (void**)&host_S2,     l * sizeof(double), cudaHostAllocPortable ) );
-    double *host_A = (double*)malloc(m * n * sizeof(double));
-    double *host_U = (double*)malloc(m * l * sizeof(double));
-    double *host_S = (double*)malloc(    l * sizeof(double));
-    double *host_VT= (double*)malloc(l * n * sizeof(double));
+    
+    double *host_A, *host_U, *host_S, *host_VT;
+    CHECK_CUDA( cudaMallocHost((void**)&host_A, m * n * sizeof(double)) );
+    CHECK_CUDA( cudaMallocHost((void**)&host_U, m * l * sizeof(double)) );
+    CHECK_CUDA( cudaMallocHost((void**)&host_S,     l * sizeof(double)) );
+    CHECK_CUDA( cudaMallocHost((void**)&host_VT,l * n * sizeof(double)) );
     
     /* generate random low rank matrix A ***/
     //genLowRankMatrixGPU(cublasH, dev_A, m, n, k, ldA);
@@ -131,11 +131,12 @@ void rsvd_test(const uint64_t m, const uint64_t n, const uint64_t k, const doubl
         //  cout << host_S1[i] << " ";
         singular_diff += fabs(host_S1[i] - host_S[i]);
     }
-    CHECK_CUDA( cudaFreeHost(host_S1) );
-    free(host_A);
-    free(host_U);
-    free(host_S);
-    free(host_VT);
+    
+    CHECK_CUDA( cudaFreeHost(host_S1));
+    CHECK_CUDA( cudaFreeHost(host_A) );
+    CHECK_CUDA( cudaFreeHost(host_U) );
+    CHECK_CUDA( cudaFreeHost(host_S) );
+    CHECK_CUDA( cudaFreeHost(host_VT));
     
     // print to screen
     double dataGB = m * n * 8 / pow(2, 30);
@@ -156,8 +157,8 @@ void rsvd_test(const uint64_t m, const uint64_t n, const uint64_t k, const doubl
     
         fs.close();
     
-    //CHECK_CUDA( cudaFreeHost( host_S1) );
-    //CHECK_CUDA( cudaFreeHost( host_S2) );
+    //CHECK_CUDA( cudaFreeHost(host_S1) );
+    //CHECK_CUDA( cudaFreeHost(host_S2) );
     
     CHECK_CUBLAS( cublasDestroy(cublasH) );
     CHECK_CUSOLVER( cusolverDnDestroy(cusolverH) );
@@ -188,7 +189,6 @@ void rQR_test(void){
     
     CHECK_CUBLAS( cublasSetMatrix(m, n, sizeof(double), h_A, m, d_A, m) );
 
-    
     CHECK_CUDA( cudaFree(d_A) );
     
     free(h_A);

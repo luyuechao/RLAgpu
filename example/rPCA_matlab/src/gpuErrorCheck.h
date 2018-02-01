@@ -128,13 +128,6 @@ static inline char const *cusolver_err_string (cusolverStatus_t err){
         }                                                                    \
     } while( 0 )
 
-#define CHECK_NCCL(cmd) do {                           \
-    ncclResult_t r = cmd;                             \
-    if (r!= ncclSuccess) {                            \
-    printf("Failed, NCCL error %s:%d '%s'\n",         \
-    __FILE__,__LINE__,ncclGetErrorString(r));         \
-    exit(EXIT_FAILURE);                               \
-    }                                                 \
-} while(0)
+
 
 #endif // _ERRORCHECK_H

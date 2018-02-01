@@ -127,6 +127,8 @@ void rsvd_colSampling_gpu(double *U, double *S, double *VT, double *A,
     /**********Step 7: transpose V ****/
     transposeGPU(cublasH, VT, V, n, l);
     CHECK_CUDA( cudaFree(V) );
+    
+    CHECK_CUDA(cudaMalloc((void**)&A,     sizeof(double) * ldA * n) );
 
 }
 
@@ -249,6 +251,7 @@ void rsvd_rowSampling_gpu(double *U, double *S, double *VT, double *A,
     
     // clean up
     CHECK_CUDA( cudaFree(VThat) );
+    CHECK_CUDA(cudaMalloc((void**)&A,     sizeof(double) * ldA * n) );
     
 }
 
@@ -256,7 +259,7 @@ void rsvd_gpu(double *U, double *S, double *VT, double *A,
               const uint64_t m, const uint64_t n, const uint64_t l, const uint64_t q,
               cusolverDnHandle_t &cusolverH, cublasHandle_t &cublasH){
     
-    if(m > n){
+    if(m >= n){
         // column sampling for tall-skinny
         rsvd_colSampling_gpu(U, S, VT, A, m, n, l, q, cusolverH, cublasH);
     

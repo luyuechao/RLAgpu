@@ -56,7 +56,7 @@ __global__ void update_kernel(double *Y, double *Z, double *SP, double *A,
                        const double *LO, const double *M,
                        const double alpha, const double mu, const int maxSize){
     
-    // initialize the memory acces index
+    // initialize the memory access index
     int dataIdx = threadIdx.x + blockIdx.x * blockDim.x;
     
     const int stride = gridDim.x * blockDim.x;// loop stride

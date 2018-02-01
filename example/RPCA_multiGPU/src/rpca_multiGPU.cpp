@@ -6,6 +6,10 @@
 
 using namespace std;
 
+void rsvd_multi_gpu(double *dev_U, double *dev_S, double *dev_VT, double *dev_A,
+                    const uint64_t m, const uint64_t n, const uint64_t l, const uint64_t q,
+                    cusolverDnHandle_t &cusolverH);
+
 /*******************The following code is for debug*****************************/
 void TimerStart(cudaEvent_t &start){ cudaEventRecord(start, 0); };
 void TimerStop(cudaEvent_t &start, cudaEvent_t &stop, float &timer, fstream &fs){
@@ -18,7 +22,7 @@ void TimerStop(cudaEvent_t &start, cudaEvent_t &stop, float &timer, fstream &fs)
 
 /******************************************************************************/
 
-void rpca(double *LO, double *SP, const double *M, unsigned int &iter,
+void rpca_multiGPU(double *LO, double *SP, const double *M, unsigned int &iter,
           const int m, const int n, const int k,
           const double tol, const unsigned int maxit){
     
@@ -142,7 +146,7 @@ void rpca(double *LO, double *SP, const double *M, unsigned int &iter,
         
         //svd(cusolverH, U, SV, VT, A, m, n); // use GPU svd
         
-        rsvd_gpu(U, SV, VT, A, m, n, l, q, cusolverH, cublasH);
+        rsvd_multi_gpu(U, SV, VT, A, m, n, l, q, cusolverH);
         
         if (TimerON)	{ TimerStop( start1, stop1, timer1, fs );}
         svd_time += timer1;
@@ -150,7 +154,7 @@ void rpca(double *LO, double *SP, const double *M, unsigned int &iter,
         if (TimerON)	{ TimerStart(start2); }
         
         // Shrinkage singular value on CPU
-        shrink_singluar_value(SV, h_SV, l, mu, svlength);
+        shrink_singluar_value(SV, h_SV, l, n, mu, svlength, sv);
         
         if (TimerON)	{ TimerStop( start2, stop2, timer2, fs );}
         
@@ -225,8 +229,8 @@ void rpca(double *LO, double *SP, const double *M, unsigned int &iter,
 }
 
 void shrink_singluar_value(double *d_SV, double *h_SV,
-                           const int svMax,
-                           const double mu, int &svlength){
+                           const int svMax, const int n,
+                           const double mu, int &svlength, int &sv){
     
     CHECK_CUDA( cudaMemcpy(h_SV, d_SV, sizeof(double) * svMax, cudaMemcpyDeviceToHost) );
     
@@ -245,11 +249,11 @@ void shrink_singluar_value(double *d_SV, double *h_SV,
     
     svlength = i;
     
-//    if (svlength < sv){
-//        sv = min(svlength + 1, n);
-//    }else{
-//        sv = min(svlength + int(0.05 * n), n);
-//    }
+    if (svlength < sv){
+        sv = min(svlength + 1, n);
+    }else{
+        sv = min(svlength + int(0.05 * n), n);
+    }
     
 //    cout << "sv = ";
 //    for (int j = 0; j < 10; j++){
