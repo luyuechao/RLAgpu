@@ -21,7 +21,7 @@ CUDA implementation of randomized singular value decomposition (rSVD).
 Install CMake, CUDA.
 
 * Step 2:
-    1. git clone https://github.com/luyuechao/LRLS_GPU
+    1. git clone https://github.com/luyuechao/RLAgpu
     2. In the project directory, edit CMakeList.txt file.
     
      change "arch" and "code" compiler flag according to your GPU architecture.
